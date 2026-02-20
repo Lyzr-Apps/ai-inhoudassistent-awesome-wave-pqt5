@@ -737,27 +737,47 @@ export default function Page() {
   // Check if agent response indicates a tool/connection error
   const checkForToolError = useCallback((result: AIAgentResponse): string | null => {
     try {
-      // Check raw_response for connection/auth errors
-      const raw = result?.raw_response ?? ''
-      const rawLower = raw.toLowerCase()
-      if (rawLower.includes('connection') || rawLower.includes('auth') || rawLower.includes('unauthorized') || rawLower.includes('forbidden') || rawLower.includes('not connected') || rawLower.includes('mislukt') || rawLower.includes('failed')) {
-        // Try to extract a meaningful message
-        const parsed = parseAgentResult(result)
-        const msg = (parsed?.message as string) ?? (parsed?.status as string) ?? ''
-        if (msg && typeof msg === 'string' && msg.length > 5) return msg
-        // Fallback: extract from raw
-        try {
-          const rawObj = JSON.parse(raw)
-          if (rawObj?.response?.message) return rawObj.response.message
-          if (rawObj?.response?.result?.message) return rawObj.response.result.message
-        } catch { /* ignore */ }
-        return raw.length > 200 ? raw.substring(0, 200) + '...' : raw
-      }
-      // Check parsed result for error status
+      // First check the parsed result for error status
       const parsed = parseAgentResult(result)
       if (parsed?.status === 'error' || parsed?.status === 'failed') {
         return (parsed?.message as string) ?? 'De agent heeft een fout gerapporteerd.'
       }
+
+      // Check raw_response for connection/auth errors
+      const raw = result?.raw_response ?? ''
+      const rawLower = raw.toLowerCase()
+      const errorKeywords = [
+        'connection', 'auth', 'unauthorized', 'forbidden',
+        'not connected', 'mislukt', 'failed', 'error',
+        'could not', 'unable to', 'permission', 'denied',
+        'timeout', 'not found', 'invalid', 'expired',
+        'niet gelukt', 'geen toegang', 'verbinding',
+        'initiateconnection', 'initiate_connection',
+      ]
+      const hasErrorKeyword = errorKeywords.some((kw) => rawLower.includes(kw))
+
+      if (hasErrorKeyword) {
+        // Try to extract a meaningful message from parsed result
+        const msg = (parsed?.message as string) ?? (parsed?.status as string) ?? ''
+        if (msg && typeof msg === 'string' && msg.length > 5) return msg
+        // Try from response message
+        const respMsg = result?.response?.message
+        if (respMsg && typeof respMsg === 'string' && respMsg.length > 5) return respMsg
+        // Fallback: extract from raw JSON
+        try {
+          const rawObj = JSON.parse(raw)
+          if (rawObj?.response?.message) return rawObj.response.message
+          if (rawObj?.response?.result?.message) return rawObj.response.result.message
+          if (rawObj?.detail) return rawObj.detail
+        } catch { /* ignore */ }
+        return raw.length > 300 ? raw.substring(0, 300) + '...' : raw
+      }
+
+      // Check if the result is completely empty (agent returned nothing useful)
+      if (parsed && Object.keys(parsed).length === 0 && !result?.response?.message) {
+        return 'De agent heeft geen resultaat teruggegeven. Probeer het opnieuw.'
+      }
+
       return null
     } catch {
       return null
@@ -781,16 +801,14 @@ export default function Page() {
       ...(Array.isArray(effectiveData.secondary_keywords) ? effectiveData.secondary_keywords : []),
     ].join(', ')
 
-    const message = `Sla dit artikel op in Notion met de titel "${effectiveData.article_title ?? 'Untitled'}".
+    const message = `Sla dit artikel op in Notion als een nieuwe pagina.
 
-Artikel inhoud:
+Titel: ${effectiveData.article_title ?? 'Untitled'}
+
+Inhoud:
 ${effectiveData.article_body ?? ''}
 
-Samenvatting:
-${effectiveData.article_summary ?? ''}
-
-Outline:
-${outlineText}
+Samenvatting: ${effectiveData.article_summary ?? ''}
 
 Zoekwoorden: ${keywords}
 Meta-beschrijving: ${effectiveData.meta_description ?? ''}`
@@ -799,37 +817,58 @@ Meta-beschrijving: ${effectiveData.meta_description ?? ''}`
       const result = await callAIAgent(message, AGENT_IDS.notionAgent)
       setActiveAgentId(null)
 
+      // Handle case where fetchWrapper returned undefined (e.g., on 500 error with page reload)
+      if (!result) {
+        setNotionStatus({
+          type: 'error',
+          message: 'Geen reactie ontvangen van de server. Controleer je internetverbinding en probeer het opnieuw.',
+        })
+        setNotionLoading(false)
+        return
+      }
+
       if (result?.success) {
         // Check if the agent reported a tool-level error despite HTTP success
         const toolError = checkForToolError(result)
         if (toolError) {
           setNotionStatus({
             type: 'error',
-            message: `Notion verbindingsprobleem: ${toolError}. Controleer of je Notion-account correct is gekoppeld in Lyzr Studio.`,
+            message: `Notion fout: ${toolError}`,
           })
         } else {
           const parsed = parseAgentResult(result)
-          const notionUrl = parsed?.notion_page_url as string | undefined
-          const statusMsg = parsed?.message as string | undefined
-          setNotionStatus({
-            type: 'success',
-            message: `${statusMsg ?? 'Artikel succesvol opgeslagen in Notion.'}${notionUrl ? ` URL: ${notionUrl}` : ''}`,
-          })
+          const notionUrl = (parsed?.notion_page_url as string) ?? (parsed?.url as string) ?? (parsed?.page_url as string)
+          const statusMsg = (parsed?.message as string) ?? (result?.response?.message as string)
 
-          if (currentHistoryId) {
-            const updatedHistory = historyRef.current.map((item) =>
-              item.id === currentHistoryId
-                ? { ...item, status: 'Opgeslagen' as const, data: effectiveData }
-                : item
-            )
-            saveHistory(updatedHistory)
+          // Verify we actually got a meaningful success (not an empty result)
+          if (parsed && Object.keys(parsed).length === 0 && !statusMsg) {
+            // Agent returned empty - might be a silent failure
+            const rawPreview = (result?.raw_response ?? '').substring(0, 200)
+            setNotionStatus({
+              type: 'error',
+              message: `De Notion agent heeft geen duidelijk resultaat teruggegeven. Raw response: ${rawPreview || 'leeg'}`,
+            })
+          } else {
+            setNotionStatus({
+              type: 'success',
+              message: `${statusMsg ?? 'Artikel succesvol opgeslagen in Notion.'}${notionUrl ? ` URL: ${notionUrl}` : ''}`,
+            })
+
+            if (currentHistoryId) {
+              const updatedHistory = historyRef.current.map((item) =>
+                item.id === currentHistoryId
+                  ? { ...item, status: 'Opgeslagen' as const, data: effectiveData }
+                  : item
+              )
+              saveHistory(updatedHistory)
+            }
           }
         }
       } else {
         const errorDetail = result?.error ?? result?.response?.message ?? result?.details ?? 'Fout bij opslaan in Notion.'
         setNotionStatus({
           type: 'error',
-          message: `${errorDetail}. Controleer of je Notion-account correct is gekoppeld in Lyzr Studio.`,
+          message: `${errorDetail}`,
         })
       }
     } catch (err) {
