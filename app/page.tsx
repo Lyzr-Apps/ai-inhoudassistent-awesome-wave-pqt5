@@ -734,6 +734,36 @@ export default function Page() {
     return null
   }, [contentData, showSampleData])
 
+  // Check if agent response indicates a tool/connection error
+  const checkForToolError = useCallback((result: AIAgentResponse): string | null => {
+    try {
+      // Check raw_response for connection/auth errors
+      const raw = result?.raw_response ?? ''
+      const rawLower = raw.toLowerCase()
+      if (rawLower.includes('connection') || rawLower.includes('auth') || rawLower.includes('unauthorized') || rawLower.includes('forbidden') || rawLower.includes('not connected') || rawLower.includes('mislukt') || rawLower.includes('failed')) {
+        // Try to extract a meaningful message
+        const parsed = parseAgentResult(result)
+        const msg = (parsed?.message as string) ?? (parsed?.status as string) ?? ''
+        if (msg && typeof msg === 'string' && msg.length > 5) return msg
+        // Fallback: extract from raw
+        try {
+          const rawObj = JSON.parse(raw)
+          if (rawObj?.response?.message) return rawObj.response.message
+          if (rawObj?.response?.result?.message) return rawObj.response.result.message
+        } catch { /* ignore */ }
+        return raw.length > 200 ? raw.substring(0, 200) + '...' : raw
+      }
+      // Check parsed result for error status
+      const parsed = parseAgentResult(result)
+      if (parsed?.status === 'error' || parsed?.status === 'failed') {
+        return (parsed?.message as string) ?? 'De agent heeft een fout gerapporteerd.'
+      }
+      return null
+    } catch {
+      return null
+    }
+  }, [])
+
   // Save to Notion
   const handleSaveNotion = useCallback(async () => {
     const effectiveData = getEffectiveData()
@@ -770,25 +800,37 @@ Meta-beschrijving: ${effectiveData.meta_description ?? ''}`
       setActiveAgentId(null)
 
       if (result?.success) {
-        const parsed = parseAgentResult(result)
-        const notionUrl = parsed?.notion_page_url as string | undefined
-        const statusMsg = parsed?.message as string | undefined
-        setNotionStatus({
-          type: 'success',
-          message: `${statusMsg ?? 'Artikel succesvol opgeslagen in Notion.'}${notionUrl ? ` URL: ${notionUrl}` : ''}`,
-        })
+        // Check if the agent reported a tool-level error despite HTTP success
+        const toolError = checkForToolError(result)
+        if (toolError) {
+          setNotionStatus({
+            type: 'error',
+            message: `Notion verbindingsprobleem: ${toolError}. Controleer of je Notion-account correct is gekoppeld in Lyzr Studio.`,
+          })
+        } else {
+          const parsed = parseAgentResult(result)
+          const notionUrl = parsed?.notion_page_url as string | undefined
+          const statusMsg = parsed?.message as string | undefined
+          setNotionStatus({
+            type: 'success',
+            message: `${statusMsg ?? 'Artikel succesvol opgeslagen in Notion.'}${notionUrl ? ` URL: ${notionUrl}` : ''}`,
+          })
 
-        if (currentHistoryId) {
-          const updatedHistory = historyRef.current.map((item) =>
-            item.id === currentHistoryId
-              ? { ...item, status: 'Opgeslagen' as const, data: effectiveData }
-              : item
-          )
-          saveHistory(updatedHistory)
+          if (currentHistoryId) {
+            const updatedHistory = historyRef.current.map((item) =>
+              item.id === currentHistoryId
+                ? { ...item, status: 'Opgeslagen' as const, data: effectiveData }
+                : item
+            )
+            saveHistory(updatedHistory)
+          }
         }
       } else {
         const errorDetail = result?.error ?? result?.response?.message ?? result?.details ?? 'Fout bij opslaan in Notion.'
-        setNotionStatus({ type: 'error', message: errorDetail })
+        setNotionStatus({
+          type: 'error',
+          message: `${errorDetail}. Controleer of je Notion-account correct is gekoppeld in Lyzr Studio.`,
+        })
       }
     } catch (err) {
       setActiveAgentId(null)
@@ -797,7 +839,7 @@ Meta-beschrijving: ${effectiveData.meta_description ?? ''}`
     }
 
     setNotionLoading(false)
-  }, [getEffectiveData, currentHistoryId, saveHistory])
+  }, [getEffectiveData, currentHistoryId, saveHistory, checkForToolError])
 
   // Create Gmail draft
   const handleGmailDraft = useCallback(async () => {
@@ -1125,9 +1167,20 @@ Zoekwoorden: ${Array.isArray(effectiveData.primary_keywords) ? effectiveData.pri
                 )}
               </Button>
               {notionStatus && (
-                <div className={`mt-3 p-2.5 text-xs flex items-start gap-2 ${notionStatus.type === 'success' ? 'bg-secondary text-foreground' : 'bg-[hsl(0,80%,95%)] text-[hsl(0,80%,45%)]'}`}>
-                  {notionStatus.type === 'success' ? <FiCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <FiAlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
-                  <span style={{ lineHeight: '1.5' }}>{notionStatus.message}</span>
+                <div className={`mt-3 p-2.5 text-xs ${notionStatus.type === 'success' ? 'bg-secondary text-foreground' : 'bg-[hsl(0,80%,95%)] text-[hsl(0,80%,45%)]'}`}>
+                  <div className="flex items-start gap-2">
+                    {notionStatus.type === 'success' ? <FiCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <FiAlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                    <span style={{ lineHeight: '1.5' }}>{notionStatus.message}</span>
+                  </div>
+                  {notionStatus.type === 'error' && (
+                    <button
+                      onClick={handleSaveNotion}
+                      disabled={notionLoading}
+                      className="mt-2 ml-5 text-xs font-medium underline hover:no-underline"
+                    >
+                      Opnieuw proberen
+                    </button>
+                  )}
                 </div>
               )}
             </CardContent>
