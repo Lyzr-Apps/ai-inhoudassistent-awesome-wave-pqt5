@@ -727,35 +727,43 @@ export default function Page() {
     setLoadingMessage('')
   }, [saveHistory])
 
+  // Get the effective data (contentData or sample data fallback)
+  const getEffectiveData = useCallback((): ContentResult | null => {
+    if (contentData) return contentData
+    if (showSampleData) return getSampleData()
+    return null
+  }, [contentData, showSampleData])
+
   // Save to Notion
   const handleSaveNotion = useCallback(async () => {
-    if (!contentData) return
+    const effectiveData = getEffectiveData()
+    if (!effectiveData) return
     setNotionLoading(true)
     setNotionStatus(null)
     setActiveAgentId(AGENT_IDS.notionAgent)
 
-    const outlineText = Array.isArray(contentData.outline)
-      ? contentData.outline.map((s) => `${s?.heading ?? ''}\n${Array.isArray(s?.subpoints) ? s.subpoints.map((sp) => `  - ${sp}`).join('\n') : ''}`).join('\n\n')
+    const outlineText = Array.isArray(effectiveData.outline)
+      ? effectiveData.outline.map((s) => `${s?.heading ?? ''}\n${Array.isArray(s?.subpoints) ? s.subpoints.map((sp) => `  - ${sp}`).join('\n') : ''}`).join('\n\n')
       : ''
 
     const keywords = [
-      ...(Array.isArray(contentData.primary_keywords) ? contentData.primary_keywords : []),
-      ...(Array.isArray(contentData.secondary_keywords) ? contentData.secondary_keywords : []),
+      ...(Array.isArray(effectiveData.primary_keywords) ? effectiveData.primary_keywords : []),
+      ...(Array.isArray(effectiveData.secondary_keywords) ? effectiveData.secondary_keywords : []),
     ].join(', ')
 
-    const message = `Sla dit artikel op in Notion met de titel "${contentData.article_title ?? 'Untitled'}".
+    const message = `Sla dit artikel op in Notion met de titel "${effectiveData.article_title ?? 'Untitled'}".
 
 Artikel inhoud:
-${contentData.article_body ?? ''}
+${effectiveData.article_body ?? ''}
 
 Samenvatting:
-${contentData.article_summary ?? ''}
+${effectiveData.article_summary ?? ''}
 
 Outline:
 ${outlineText}
 
 Zoekwoorden: ${keywords}
-Meta-beschrijving: ${contentData.meta_description ?? ''}`
+Meta-beschrijving: ${effectiveData.meta_description ?? ''}`
 
     try {
       const result = await callAIAgent(message, AGENT_IDS.notionAgent)
@@ -773,25 +781,28 @@ Meta-beschrijving: ${contentData.meta_description ?? ''}`
         if (currentHistoryId) {
           const updatedHistory = historyRef.current.map((item) =>
             item.id === currentHistoryId
-              ? { ...item, status: 'Opgeslagen' as const, data: contentData }
+              ? { ...item, status: 'Opgeslagen' as const, data: effectiveData }
               : item
           )
           saveHistory(updatedHistory)
         }
       } else {
-        setNotionStatus({ type: 'error', message: result?.error ?? 'Fout bij opslaan in Notion.' })
+        const errorDetail = result?.error ?? result?.response?.message ?? result?.details ?? 'Fout bij opslaan in Notion.'
+        setNotionStatus({ type: 'error', message: errorDetail })
       }
-    } catch {
+    } catch (err) {
       setActiveAgentId(null)
-      setNotionStatus({ type: 'error', message: 'Onverwachte fout bij opslaan in Notion.' })
+      const errMsg = err instanceof Error ? err.message : 'Onverwachte fout bij opslaan in Notion.'
+      setNotionStatus({ type: 'error', message: errMsg })
     }
 
     setNotionLoading(false)
-  }, [contentData, currentHistoryId, saveHistory])
+  }, [getEffectiveData, currentHistoryId, saveHistory])
 
   // Create Gmail draft
   const handleGmailDraft = useCallback(async () => {
-    if (!contentData || !gmailForm.recipient.trim() || !gmailForm.subject.trim()) return
+    const effectiveData = getEffectiveData()
+    if (!effectiveData || !gmailForm.recipient.trim() || !gmailForm.subject.trim()) return
     setGmailLoading(true)
     setGmailStatus(null)
     setActiveAgentId(AGENT_IDS.gmailAgent)
@@ -801,12 +812,12 @@ Ontvanger: ${gmailForm.recipient}
 Onderwerp: ${gmailForm.subject}
 ${gmailForm.message ? `Bericht: ${gmailForm.message}` : ''}
 
-Artikel titel: ${contentData.article_title ?? ''}
+Artikel titel: ${effectiveData.article_title ?? ''}
 
 Artikel samenvatting:
-${contentData.article_summary ?? ''}
+${effectiveData.article_summary ?? ''}
 
-Zoekwoorden: ${Array.isArray(contentData.primary_keywords) ? contentData.primary_keywords.join(', ') : ''}`
+Zoekwoorden: ${Array.isArray(effectiveData.primary_keywords) ? effectiveData.primary_keywords.join(', ') : ''}`
 
     try {
       const result = await callAIAgent(message, AGENT_IDS.gmailAgent)
@@ -829,15 +840,17 @@ Zoekwoorden: ${Array.isArray(contentData.primary_keywords) ? contentData.primary
         setGmailForm({ recipient: '', subject: '', message: '' })
         setTimeout(() => setGmailDialogOpen(false), 2500)
       } else {
-        setGmailStatus({ type: 'error', message: result?.error ?? 'Fout bij aanmaken email concept.' })
+        const errorDetail = result?.error ?? result?.response?.message ?? result?.details ?? 'Fout bij aanmaken email concept.'
+        setGmailStatus({ type: 'error', message: errorDetail })
       }
-    } catch {
+    } catch (err) {
       setActiveAgentId(null)
-      setGmailStatus({ type: 'error', message: 'Onverwachte fout bij aanmaken email concept.' })
+      const errMsg = err instanceof Error ? err.message : 'Onverwachte fout bij aanmaken email concept.'
+      setGmailStatus({ type: 'error', message: errMsg })
     }
 
     setGmailLoading(false)
-  }, [contentData, gmailForm, currentHistoryId, saveHistory])
+  }, [getEffectiveData, gmailForm, currentHistoryId, saveHistory])
 
   // Open history item
   const openHistoryItem = useCallback((item: HistoryItem) => {
@@ -1095,7 +1108,7 @@ Zoekwoorden: ${Array.isArray(contentData.primary_keywords) ? contentData.primary
             <CardContent>
               <Button
                 onClick={handleSaveNotion}
-                disabled={notionLoading || !contentData}
+                disabled={notionLoading || !displayData}
                 className="w-full gap-2"
                 variant="outline"
               >
@@ -1139,7 +1152,7 @@ Zoekwoorden: ${Array.isArray(contentData.primary_keywords) ? contentData.primary
                   <Button
                     variant="outline"
                     className="w-full gap-2"
-                    disabled={!contentData}
+                    disabled={!displayData}
                   >
                     <FiSend className="w-4 h-4" />
                     Maak Email Draft
