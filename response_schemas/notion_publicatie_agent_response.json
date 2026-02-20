@@ -1,0 +1,24 @@
+{
+  "agent_name": "Notion Publicatie Agent",
+  "agent_id": "69978631ce15805ae8e3267b",
+  "description": "Slaat goedgekeurde artikelen, outlines en notities op in Notion na review door de gebruiker",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "result": {
+      "status": "string",
+      "message": "string",
+      "notion_page_url": "string",
+      "page_title": "string"
+    }
+  },
+  "example_response": {
+    "result": {
+      "status": "sample string",
+      "message": "sample string",
+      "notion_page_url": "sample string",
+      "page_title": "sample string"
+    }
+  }
+}

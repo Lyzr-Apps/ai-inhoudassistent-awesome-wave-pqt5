@@ -1,0 +1,24 @@
+{
+  "agent_name": "Gmail Draft Agent",
+  "agent_id": "699786302b8310cce6585528",
+  "description": "Maakt email concepten aan in Gmail met het artikel of een samenvatting, klaar om te versturen",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "result": {
+      "status": "string",
+      "message": "string",
+      "draft_subject": "string",
+      "recipient": "string"
+    }
+  },
+  "example_response": {
+    "result": {
+      "status": "sample string",
+      "message": "sample string",
+      "draft_subject": "sample string",
+      "recipient": "sample string"
+    }
+  }
+}

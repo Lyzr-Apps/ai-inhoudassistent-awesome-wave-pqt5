@@ -1,0 +1,125 @@
+{
+  "workflow": {
+    "name": "Dutch AI Content Assistant",
+    "description": "AI Content Assistant voor een Nederlandse AI Influencer met manager-subagent en onafhankelijke agents",
+    "pattern": "hybrid_manager_subagent_independent",
+    "nodes": [
+      {"id": "input_node", "type": "Input", "label": "Gebruiker Input", "nodeCategory": "input"},
+      {"id": "manager_agent", "type": "Agent", "label": "Content Coordinator", "nodeCategory": "agent"},
+      {"id": "trend_agent", "type": "Agent", "label": "Onderwerp & Trend Agent", "nodeCategory": "agent"},
+      {"id": "schrijf_agent", "type": "Agent", "label": "Schrijf Agent", "nodeCategory": "agent"},
+      {"id": "seo_agent", "type": "Agent", "label": "SEO Agent", "nodeCategory": "agent"},
+      {"id": "notion_agent", "type": "Agent", "label": "Notion Publicatie Agent", "nodeCategory": "agent"},
+      {"id": "gmail_agent", "type": "Agent", "label": "Gmail Draft Agent", "nodeCategory": "agent"},
+      {"id": "output_node", "type": "Output", "label": "Content Output", "nodeCategory": "end"}
+    ],
+    "edges": [
+      {"source": "input_node", "target": "manager_agent"},
+      {"source": "manager_agent", "target": "trend_agent"},
+      {"source": "manager_agent", "target": "schrijf_agent"},
+      {"source": "manager_agent", "target": "seo_agent"},
+      {"source": "manager_agent", "target": "notion_agent"},
+      {"source": "notion_agent", "target": "gmail_agent"},
+      {"source": "manager_agent", "target": "output_node"}
+    ]
+  },
+  "agents": {
+    "manager": {
+      "name": "Content Coordinator",
+      "agent_id": "699786002b8310cce6585526",
+      "node_id": "manager_agent",
+      "type": "manager",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.3,
+      "top_p": 1,
+      "managed_agents": [
+        "699785ebedc2607742af8db0",
+        "699785ec37d90bb3bde731b6",
+        "699785eb4a4b5df20143a31a"
+      ],
+      "tools": [],
+      "trigger": "Genereer Content button on Dashboard"
+    },
+    "sub_agents": [
+      {
+        "name": "Onderwerp & Trend Agent",
+        "agent_id": "699785ebedc2607742af8db0",
+        "node_id": "trend_agent",
+        "type": "sub_agent",
+        "provider": "perplexity",
+        "model": "sonar-pro",
+        "temperature": 0.4,
+        "top_p": 0.95,
+        "tools": [],
+        "trigger": "Auto (via Manager)"
+      },
+      {
+        "name": "Schrijf Agent",
+        "agent_id": "699785ec37d90bb3bde731b6",
+        "node_id": "schrijf_agent",
+        "type": "sub_agent",
+        "provider": "openai",
+        "model": "gpt-4.1",
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "tools": [],
+        "trigger": "Auto (via Manager)"
+      },
+      {
+        "name": "SEO Agent",
+        "agent_id": "699785eb4a4b5df20143a31a",
+        "node_id": "seo_agent",
+        "type": "sub_agent",
+        "provider": "openai",
+        "model": "gpt-4.1",
+        "temperature": 0.3,
+        "top_p": 1,
+        "tools": [],
+        "trigger": "Auto (via Manager)"
+      }
+    ],
+    "independent_agents": [
+      {
+        "name": "Notion Publicatie Agent",
+        "agent_id": "69978631ce15805ae8e3267b",
+        "node_id": "notion_agent",
+        "type": "independent",
+        "provider": "openai",
+        "model": "gpt-4.1",
+        "temperature": 0.2,
+        "top_p": 1,
+        "tools": ["NOTION_CREATE_NOTION_PAGE", "NOTION_ADD_PAGE_CONTENT"],
+        "trigger": "Opslaan in Notion button"
+      },
+      {
+        "name": "Gmail Draft Agent",
+        "agent_id": "699786302b8310cce6585528",
+        "node_id": "gmail_agent",
+        "type": "independent",
+        "provider": "openai",
+        "model": "gpt-4.1",
+        "temperature": 0.2,
+        "top_p": 1,
+        "tools": ["GMAIL_CREATE_EMAIL_DRAFT"],
+        "trigger": "Maak Email Draft button"
+      }
+    ]
+  },
+  "agent_ids": {
+    "content_coordinator": "699786002b8310cce6585526",
+    "onderwerp_trend_agent": "699785ebedc2607742af8db0",
+    "schrijf_agent": "699785ec37d90bb3bde731b6",
+    "seo_agent": "699785eb4a4b5df20143a31a",
+    "notion_publicatie_agent": "69978631ce15805ae8e3267b",
+    "gmail_draft_agent": "699786302b8310cce6585528"
+  },
+  "response_schemas": {
+    "content_coordinator": "response_schemas/content_coordinator_response.json",
+    "onderwerp_trend_agent": "response_schemas/onderwerp_trend_agent_response.json",
+    "schrijf_agent": "response_schemas/schrijf_agent_response.json",
+    "seo_agent": "response_schemas/seo_agent_response.json",
+    "notion_publicatie_agent": "response_schemas/notion_publicatie_agent_response.json",
+    "gmail_draft_agent": "response_schemas/gmail_draft_agent_response.json"
+  }
+}

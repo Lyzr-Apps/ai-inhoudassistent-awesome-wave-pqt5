@@ -1,0 +1,80 @@
+{
+  "agent_name": "Content Coordinator",
+  "agent_id": "699786002b8310cce6585526",
+  "description": "Coordineert de sub-agents voor onderzoek, schrijven en SEO-optimalisatie. Combineert alle resultaten tot een samenhangend content-pakket",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "result": {
+      "trending_topics": [
+        {
+          "topic": "string",
+          "description": "string",
+          "relevance": "string",
+          "popularity_score": "string"
+        }
+      ],
+      "trend_summary": "string",
+      "outline": [
+        {
+          "heading": "string",
+          "subpoints": [
+            "string"
+          ]
+        }
+      ],
+      "article_title": "string",
+      "article_body": "string",
+      "article_summary": "string",
+      "primary_keywords": [
+        "string"
+      ],
+      "secondary_keywords": [
+        "string"
+      ],
+      "meta_description": "string",
+      "title_suggestions": [
+        "string"
+      ],
+      "seo_score": "string",
+      "search_intent": "string"
+    }
+  },
+  "example_response": {
+    "result": {
+      "trending_topics": [
+        {
+          "topic": "sample string",
+          "description": "sample string",
+          "relevance": "sample string",
+          "popularity_score": "sample string"
+        }
+      ],
+      "trend_summary": "sample string",
+      "outline": [
+        {
+          "heading": "sample string",
+          "subpoints": [
+            "sample string"
+          ]
+        }
+      ],
+      "article_title": "sample string",
+      "article_body": "sample string",
+      "article_summary": "sample string",
+      "primary_keywords": [
+        "sample string"
+      ],
+      "secondary_keywords": [
+        "sample string"
+      ],
+      "meta_description": "sample string",
+      "title_suggestions": [
+        "sample string"
+      ],
+      "seo_score": "sample string",
+      "search_intent": "sample string"
+    }
+  }
+}
